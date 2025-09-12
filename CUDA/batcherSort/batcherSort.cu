@@ -1,20 +1,19 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 32 
 #define SIZE 8 
 
-__global__ void bitonicSorterHalver(int *list, int j, int k) {
+__global__ void bitonicSorterHalver(int *list, int j) {
         int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-        int partner_idx = idx ^ j;
+        int p_idx = idx ^ j;
 
-        if (partner_idx > idx) {
-                bool sort_ascending = ((idx / k) % 2 == 0);
-                if ( (list[idx] > list[partner_idx]) == sort_ascending ) {
+        if (idx < p_idx) {
+                if (list[idx] > list[p_idx]) {
                     int temp = list[idx];
-                    list[idx] = list[partner_idx];
-                    list[partner_idx] = temp;
+                    list[idx] = list[p_idx];
+                    list[p_idx] = temp;
                 }
         }
 }
@@ -30,13 +29,13 @@ int main(void){
         cudaMalloc((void**)&device_bitonic_list,sizeof(int)*n);
         cudaMemcpy(device_bitonic_list,bitonic_list,sizeof(int)*n,cudaMemcpyHostToDevice);
 
-        int blocks = (n + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+        int threads = std::min(n,THREADS_PER_BLOCK);
+        int blocks = (n + threads - 1) / threads;
 
-        for (int k = 2; k <= n ; k *= 2) 
-                for (int j = k / 2 ; j > 0 ; j /= 2) {
-                    bitonicSorterHalver<<<blocks, THREADS_PER_BLOCK>>>(device_bitonic_list, j, k);
-                    cudaDeviceSynchronize();
-                }
+        for (int j = n / 2 ; j > 0 ; j /= 2) {
+            bitonicSorterHalver<<<blocks, threads>>>(device_bitonic_list, j);
+            cudaDeviceSynchronize();
+        }
 
         cudaMemcpy(bitonic_list,device_bitonic_list,sizeof(int)*n,cudaMemcpyDeviceToHost);
         cudaFree(device_bitonic_list);
