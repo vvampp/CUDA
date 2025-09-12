@@ -54,7 +54,7 @@ int main(void){
         cudaMemcpy(bitonic_list,device_bitonic_list,sizeof(int)*n,cudaMemcpyDeviceToHost);
         cudaFree(device_bitonic_list);
 
-        printf("\nAfter Bitonic Sorting: \n");
+        printf("\nAfter Bitonic Merging: \n");
         for( int i = 0 ; i < n ; ++i )
                 std::cout << bitonic_list[i] << " ";
         std::cout << std::endl;
