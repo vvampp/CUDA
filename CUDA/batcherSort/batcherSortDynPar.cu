@@ -1,7 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 32 
 #define SIZE 8 
 
 __global__ void bitonicHalver(int *bitonic_list, int n){
@@ -23,9 +23,11 @@ __global__ void bitonicSorter(int *bitonic_list, int sublist_size, int n_sublist
 
         int sublist_index = idx * sublist_size;
         int *sublist_ptr = &bitonic_list[sublist_index];
-        int blocks = (sublist_size/2 + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK; 
 
-        bitonicHalver<<<blocks,THREADS_PER_BLOCK>>>(sublist_ptr,sublist_size/2);
+        int threads = min(sublist_size/2,THREADS_PER_BLOCK);
+        int blocks = (sublist_size/2 + threads - 1) / threads; 
+
+        bitonicHalver<<<blocks,threads>>>(sublist_ptr,sublist_size/2);
 }
 
 
@@ -35,16 +37,17 @@ int main(void){
         int bitonic_list[n] = {1,2,3,6,7,4,2,1};
         for( int i = 0 ; i < n ; ++i )
                 std::cout << bitonic_list[i] << " ";
-
         int * device_bitonic_list; 
         cudaMalloc((void**)&device_bitonic_list,sizeof(int)*n);
         cudaMemcpy(device_bitonic_list,bitonic_list,sizeof(int)*n,cudaMemcpyHostToDevice);
 
-        for( int sublist_size = n ; sublist_size >= 1 ; sublist_size /= 2 ){
+        for( int sublist_size = n ; sublist_size > 1 ; sublist_size /= 2 ){
                 int n_sublists = (int)(n/sublist_size);
-                int blocks = (n_sublists + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+
+                int threads = std::min(n_sublists, THREADS_PER_BLOCK);
+                int blocks = (n_sublists + threads - 1) / threads;
                 
-                bitonicSorter<<<blocks,THREADS_PER_BLOCK>>>(device_bitonic_list,sublist_size,n_sublists);
+                bitonicSorter<<<blocks,threads>>>(device_bitonic_list,sublist_size,n_sublists);
                 cudaDeviceSynchronize();
         }
 
