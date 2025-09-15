@@ -1,37 +1,37 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#define THREADS_PER_BLOCK 32 
-#define SIZE 32 
+#include "utils.h"
+#define THREADS_PER_BLOCK 512
 
-__global__ void reverse(int *array, int size){
+__global__ void reverse(float *array, int size){
         int idx = threadIdx.x + blockIdx.x * blockDim.x;        
         while( idx < size / 2){
-                int temp = array[idx];
+                float temp = array[idx];
                 array[idx] = array[size - 1 - idx];
                 array[size - 1 - idx] = temp;
                 idx += blockDim.x * gridDim.x;
         }
 }
 
-__global__ void bitonicMerge(int *list, int j) {
+__global__ void bitonicMerge(float *list, int j) {
         int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
         int p_idx = idx ^ j;
 
         if (idx < p_idx) {
                 if (list[idx] > list[p_idx]) {
-                    int temp = list[idx];
+                    float temp = list[idx];
                     list[idx] = list[p_idx];
                     list[p_idx] = temp;
                 }
         }
 }
 
-void bitonicSort(int *d_list, int size){
+void bitonicSort(float *d_list, int size){
         if (size <= 1)
                 return;
-
+        
         int half_size = size/2;
         int threads = std::min(half_size,THREADS_PER_BLOCK);
         int blocks = (half_size + threads - 1)/threads;
@@ -53,26 +53,30 @@ void bitonicSort(int *d_list, int size){
         }
 }
 
-int main(void){
-        int n = SIZE;
+int main(int argc, char* argv[]){
+        if(argc < 2){
+                std::cout << "Use: " << argv[0] << " <input_file_name.txt>" << std::endl;
+                return -1;
+        }
 
-        int bitonic_list[n] = {3,4,1,6,4,2,6,7,1,32,1,4,5,2,65,7,12,54,65,7,2,6,77,35,32,54,65,7,23,5,0,32};
-        for( int i = 0 ; i < n ; ++i )
-                std::cout << bitonic_list[i] << " ";
+        long n = 0;
+        float *array = txt_to_array(argv[1], n);
 
-        int * device_bitonic_list; 
-        cudaMalloc((void**)&device_bitonic_list,sizeof(int)*n);
-        cudaMemcpy(device_bitonic_list,bitonic_list,sizeof(int)*n,cudaMemcpyHostToDevice);
+        if(array == NULL){
+                std::cout << "Couldn't read numbers from " << argv[1] << std::endl;
+                return -1;
+        }
 
-        bitonicSort(device_bitonic_list,n);
+        float * device_array; 
+        cudaMalloc((void**)&device_array,sizeof(float)*n);
+        cudaMemcpy(device_array,array,sizeof(float)*n,cudaMemcpyHostToDevice);
 
-        cudaMemcpy(bitonic_list,device_bitonic_list,sizeof(int)*n,cudaMemcpyDeviceToHost);
-        cudaFree(device_bitonic_list);
+        bitonicSort(device_array,n);
 
-        printf("\nAfter Bitonic Sorting: \n");
-        for( int i = 0 ; i < n ; ++i )
-                std::cout << bitonic_list[i] << " ";
-        std::cout << std::endl;
+
+        cudaMemcpy(array,device_array,sizeof(float)*n,cudaMemcpyDeviceToHost);
+        array_to_txt("sorted_numbers.txt",array,n);
+        cudaFree(device_array);
 
         return 0;
 }
